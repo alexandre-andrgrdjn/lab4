@@ -1,98 +1,76 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdlib.h>
 #include <unistd.h>
 
+sem_t terminal_sem;  // Semaphore pour les places de terminal
+pthread_mutex_t runway_mutex;  // Mutex pour les pistes
+
 int num_planes, num_terminals, planes_per_terminal, num_runways;
-sem_t terminal_slots;
-sem_t runway_slots;
-pthread_mutex_t print_mutex;
 
-void* plane_activity(void* plane_num) {
-    int plane = *((int*) plane_num);
-    
-    // Arrival at the airport
-    usleep(rand() % 500000); // Simulate random arrival time
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is arriving at the airport...\n", plane);
-    pthread_mutex_unlock(&print_mutex);
+// Fonction pour simuler un avion (thread)
+void* plane_operations(void* plane_id) {
+    int id = *(int*)plane_id;
+    printf("Plane %d is arriving at the airport...\n", id);
+    usleep(rand() % 500000);  // Simuler un délai d'arrivée
 
-    // Waiting for a terminal slot
-    sem_wait(&terminal_slots);
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is waiting for a terminal slot...\n", plane);
-    pthread_mutex_unlock(&print_mutex);
+    // Attente d'une place dans un terminal
+    printf("Plane %d is waiting for a terminal slot...\n", id);
+    sem_wait(&terminal_sem);  // Attente d'une place de terminal
+    printf("Plane %d has parked at a terminal slot.\n", id);
 
-    // Simulate waiting for terminal and parking
-    usleep(1000000); // Simulate some time for parking
+    usleep(rand() % 500000);  // Simuler un délai de stationnement
 
-    // Park at the terminal
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d has parked at a terminal slot.\n", plane);
-    pthread_mutex_unlock(&print_mutex);
+    // Attente d'une piste pour décoller
+    printf("Plane %d is waiting for a runway...\n", id);
+    pthread_mutex_lock(&runway_mutex);  // Attente d'une piste
+    printf("Plane %d is taking off!\n", id);
+    usleep(rand() % 500000);  // Simuler le décollage
 
-    // Waiting for a runway
-    sem_wait(&runway_slots);
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is waiting for a runway...\n", plane);
-    pthread_mutex_unlock(&print_mutex);
-
-    // Simulate waiting for runway and take off
-    usleep(1000000); // Simulate some time before take off
-
-    // Take off (without emojis or additional symbols)
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is taking off!\n", plane);
-    pthread_mutex_unlock(&print_mutex);
-    
-    // Release terminal slot and runway
-    sem_post(&terminal_slots);
-    sem_post(&runway_slots);
+    // Libération de la place de terminal et de la piste
+    sem_post(&terminal_sem);
+    pthread_mutex_unlock(&runway_mutex);
     
     return NULL;
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 5) {
-        fprintf(stderr, "Usage: %s N T P R\n", argv[0]);
-        return 1;
+        printf("Usage: ./airport_simulation <N> <T> <P> <R>\n");
+        return -1;
     }
 
-    // Read input values
     num_planes = atoi(argv[1]);
     num_terminals = atoi(argv[2]);
     planes_per_terminal = atoi(argv[3]);
     num_runways = atoi(argv[4]);
 
-    // Initialize semaphores and mutex
-    sem_init(&terminal_slots, 0, num_terminals * planes_per_terminal);
-    sem_init(&runway_slots, 0, num_runways);
-    pthread_mutex_init(&print_mutex, NULL);
+    // Initialisation du sémaphore et du mutex
+    sem_init(&terminal_sem, 0, num_terminals * planes_per_terminal);
+    pthread_mutex_init(&runway_mutex, NULL);
 
-    printf("Airport simulation with %d planes, %d terminals (%d planes per terminal), and %d runways started.\n",
+    printf("Airport simulation with %d planes, %d terminals (%d planes per terminal), and %d runways started.\n", 
            num_planes, num_terminals, planes_per_terminal, num_runways);
 
-    pthread_t threads[num_planes];
-    int plane_nums[num_planes];
+    pthread_t planes[num_planes];
+    int plane_ids[num_planes];
 
-    // Create threads for each plane
+    // Création des threads pour les avions
     for (int i = 0; i < num_planes; i++) {
-        plane_nums[i] = i + 1;
-        pthread_create(&threads[i], NULL, plane_activity, &plane_nums[i]);
+        plane_ids[i] = i + 1;  // ID de l'avion (1 à N)
+        pthread_create(&planes[i], NULL, plane_operations, &plane_ids[i]);
     }
 
-    // Wait for all planes to complete
+    // Attente de la fin de tous les threads
     for (int i = 0; i < num_planes; i++) {
-        pthread_join(threads[i], NULL);
+        pthread_join(planes[i], NULL);
     }
+
+    // Nettoyage des ressources
+    sem_destroy(&terminal_sem);
+    pthread_mutex_destroy(&runway_mutex);
 
     printf("All planes have successfully taken off.\n");
-
-    // Clean up
-    sem_destroy(&terminal_slots);
-    sem_destroy(&runway_slots);
-    pthread_mutex_destroy(&print_mutex);
-
     return 0;
 }
