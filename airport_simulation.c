@@ -23,9 +23,11 @@ void* plane_activity(void* plane_num) {
     pthread_mutex_lock(&print_mutex);
     printf("Plane %d is waiting for a terminal slot...\n", plane);
     pthread_mutex_unlock(&print_mutex);
-    
+
+    // Simulate waiting for terminal and parking
+    usleep(1000000); // Simulate some time for parking
+
     // Park at the terminal
-    usleep(rand() % 500000); // Simulate random parking time
     pthread_mutex_lock(&print_mutex);
     printf("Plane %d has parked at a terminal slot.\n", plane);
     pthread_mutex_unlock(&print_mutex);
@@ -35,9 +37,11 @@ void* plane_activity(void* plane_num) {
     pthread_mutex_lock(&print_mutex);
     printf("Plane %d is waiting for a runway...\n", plane);
     pthread_mutex_unlock(&print_mutex);
-    
+
+    // Simulate waiting for runway and take off
+    usleep(1000000); // Simulate some time before take off
+
     // Take off (without emojis or additional symbols)
-    usleep(rand() % 500000); // Simulate random takeoff time
     pthread_mutex_lock(&print_mutex);
     printf("Plane %d is taking off!\n", plane);
     pthread_mutex_unlock(&print_mutex);
