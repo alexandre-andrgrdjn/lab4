@@ -36,12 +36,10 @@ void* plane_activity(void* plane_num) {
     printf("Plane %d is waiting for a runway...\n", plane);
     pthread_mutex_unlock(&print_mutex);
     
-    // Take off (with a visual representation)
+    // Take off (without emojis or additional symbols)
     usleep(rand() % 500000); // Simulate random takeoff time
     pthread_mutex_lock(&print_mutex);
     printf("Plane %d is taking off!\n", plane);
-    printf("     __|__\n");
-    printf("    --o--o--\n");
     pthread_mutex_unlock(&print_mutex);
     
     // Release terminal slot and runway
