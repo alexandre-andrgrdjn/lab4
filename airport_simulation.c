@@ -4,111 +4,92 @@
 #include <semaphore.h>
 #include <unistd.h>
 
-#define MAX_PLANES 100
+int num_planes, num_terminals, planes_per_terminal, num_runways;
+sem_t terminal_slots;
+sem_t runway_slots;
+pthread_mutex_t print_mutex;
 
-// Global variables
-int N, T, P, R; // Number of planes, terminals, planes per terminal, and runways
-sem_t terminal_slots; // Semaphore for available terminal slots
-pthread_mutex_t runway_mutex; // Mutex for runway access
-pthread_mutex_t print_mutex; // Mutex for synchronized printing
-
-void* plane_routine(void* arg) {
-    int id = *(int*)arg;
+void* plane_activity(void* plane_num) {
+    int plane = *((int*) plane_num);
+    
+    // Arrival at the airport
     usleep(rand() % 500000); // Simulate random arrival time
-
-    // Arrival message
     pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is arriving at the airport...\n", id);
+    printf("Plane %d is arriving at the airport...\n", plane);
     pthread_mutex_unlock(&print_mutex);
 
-    // Wait for a terminal slot
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is waiting for a terminal slot...\n", id);
-    pthread_mutex_unlock(&print_mutex);
-
+    // Waiting for a terminal slot
     sem_wait(&terminal_slots);
-
-    // Park at terminal
     pthread_mutex_lock(&print_mutex);
-    printf("Plane %d has parked at a terminal slot.\n", id);
+    printf("Plane %d is waiting for a terminal slot...\n", plane);
+    pthread_mutex_unlock(&print_mutex);
+    
+    // Park at the terminal
+    usleep(rand() % 500000); // Simulate random parking time
+    pthread_mutex_lock(&print_mutex);
+    printf("Plane %d has parked at a terminal slot.\n", plane);
     pthread_mutex_unlock(&print_mutex);
 
-    usleep(rand() % 500000); // Simulate time spent at terminal
-
-    // Wait for runway access
+    // Waiting for a runway
+    sem_wait(&runway_slots);
     pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is waiting for a runway...\n", id);
+    printf("Plane %d is waiting for a runway...\n", plane);
     pthread_mutex_unlock(&print_mutex);
-
-    pthread_mutex_lock(&runway_mutex);
-
-    // Take off
+    
+    // Take off (with a visual representation)
+    usleep(rand() % 500000); // Simulate random takeoff time
     pthread_mutex_lock(&print_mutex);
-    printf("Plane %d is taking off!\n", id);
+    printf("Plane %d is taking off!\n", plane);
+    printf("     __|__\n");
+    printf("    --o--o--\n");
     pthread_mutex_unlock(&print_mutex);
-
-    usleep(rand() % 500000); // Simulate takeoff time
-
-    pthread_mutex_lock(&print_mutex);
-    printf("Plane %d has taken off!\n", id);
-    pthread_mutex_unlock(&print_mutex);
-
-    pthread_mutex_unlock(&runway_mutex);
-    sem_post(&terminal_slots); // Free terminal slot
-
-    free(arg);
+    
+    // Release terminal slot and runway
+    sem_post(&terminal_slots);
+    sem_post(&runway_slots);
+    
     return NULL;
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 5) {
-        printf("Usage: %s <N> <T> <P> <R>\n", argv[0]);
+        fprintf(stderr, "Usage: %s N T P R\n", argv[0]);
         return 1;
     }
 
-    // Parse arguments
-    N = atoi(argv[1]);
-    T = atoi(argv[2]);
-    P = atoi(argv[3]);
-    R = atoi(argv[4]);
+    // Read input values
+    num_planes = atoi(argv[1]);
+    num_terminals = atoi(argv[2]);
+    planes_per_terminal = atoi(argv[3]);
+    num_runways = atoi(argv[4]);
 
-    if (N <= 0 || T <= 0 || P <= 0 || R <= 0) {
-        printf("All values must be positive integers.\n");
-        return 1;
-    }
-
-    // Initialize synchronization mechanisms
-    sem_init(&terminal_slots, 0, T * P);
-    pthread_mutex_init(&runway_mutex, NULL);
+    // Initialize semaphores and mutex
+    sem_init(&terminal_slots, 0, num_terminals * planes_per_terminal);
+    sem_init(&runway_slots, 0, num_runways);
     pthread_mutex_init(&print_mutex, NULL);
 
-    // Print initial configuration
-    pthread_mutex_lock(&print_mutex);
-    printf("Airport simulation with %d planes, %d terminals (%d planes per terminal), and %d runways started.\n", N, T, P, R);
-    pthread_mutex_unlock(&print_mutex);
+    printf("Airport simulation with %d planes, %d terminals (%d planes per terminal), and %d runways started.\n",
+           num_planes, num_terminals, planes_per_terminal, num_runways);
 
-    pthread_t planes[MAX_PLANES];
+    pthread_t threads[num_planes];
+    int plane_nums[num_planes];
 
-    // Create plane threads
-    for (int i = 0; i < N; i++) {
-        int* id = malloc(sizeof(int));
-        *id = i + 1;
-        pthread_create(&planes[i], NULL, plane_routine, id);
+    // Create threads for each plane
+    for (int i = 0; i < num_planes; i++) {
+        plane_nums[i] = i + 1;
+        pthread_create(&threads[i], NULL, plane_activity, &plane_nums[i]);
     }
 
-    // Wait for all planes to take off
-    for (int i = 0; i < N; i++) {
-        pthread_join(planes[i], NULL);
+    // Wait for all planes to complete
+    for (int i = 0; i < num_planes; i++) {
+        pthread_join(threads[i], NULL);
     }
 
-    // Print final message
-    pthread_mutex_lock(&print_mutex);
     printf("All planes have successfully taken off.\n");
-    pthread_mutex_unlock(&print_mutex);
 
-    // Cleanup
+    // Clean up
     sem_destroy(&terminal_slots);
-    pthread_mutex_destroy(&runway_mutex);
+    sem_destroy(&runway_slots);
     pthread_mutex_destroy(&print_mutex);
 
     return 0;
